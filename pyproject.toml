@@ -1,0 +1,109 @@
+[project]
+name = "datasci-315"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "ipykernel>=7.1.0",
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.0",
+    "pandas>=2.3.3",
+    "ruff>=0.14.10",
+    "scikit-learn>=1.8.0",
+    "scikit-image>=0.25.2",
+    "torch>=2.9.1",
+    "typer>=0.21.0",
+    "nbformat>=5.10.4",
+    "nbconvert>=7.16.6",
+]
+
+[project.scripts]
+release = "release:app"
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ARG",    # flake8-unused-arguments
+    "SIM",    # flake8-simplify
+    "TCH",    # flake8-type-checking
+    "PTH",    # flake8-use-pathlib
+    "ERA",    # eradicate (commented-out code)
+    "PL",     # pylint
+    "RUF",    # Ruff-specific rules
+    "N",      # pep8-naming
+    "S",      # flake8-bandit (security)
+    "A",      # flake8-builtins
+    "COM",    # flake8-commas
+    "C90",    # mccabe complexity
+    "DJ",     # flake8-django
+    "EM",     # flake8-errmsg
+    "EXE",    # flake8-executable
+    "ISC",    # flake8-implicit-str-concat
+    "ICN",    # flake8-import-conventions
+    "G",      # flake8-logging-format
+    "INP",    # flake8-no-pep420
+    "PIE",    # flake8-pie
+    "T20",    # flake8-print
+    "PYI",    # flake8-pyi
+    "PT",     # flake8-pytest-style
+    "Q",      # flake8-quotes
+    "RSE",    # flake8-raise
+    "RET",    # flake8-return
+    "SLF",    # flake8-self
+    "SLOT",   # flake8-slots
+    "TID",    # flake8-tidy-imports
+    "INT",    # flake8-gettext
+    "FBT",    # flake8-boolean-trap
+    "LOG",    # flake8-logging
+    "TRY",    # tryceratops
+    "FLY",    # flynt
+    "PERF",   # perflint
+    "FURB",   # refurb
+]
+
+ignore = [
+    "T201",   # print statements OK for notebooks
+    "S101",   # assert statements OK for tests
+    "PLR2004", # magic values OK in educational code
+    "ERA001", # commented code OK for educational purposes
+    "INP001", # implicit namespace packages OK
+    "PLR0913", # too many arguments OK for learning
+    "FBT001", # boolean positional arg OK
+    "FBT002", # boolean default value OK
+    "COM812", # conflicts with ruff formatter
+    "RET505", # elif after return OK for pedagogical clarity
+    "UP032",  # .format() OK when teaching string formatting
+    "PERF401", # loop-to-comprehension OK when teaching comprehensions
+    "PLR0133", # constant comparisons OK for teaching type coercion
+    "PT018",  # compound assertions OK for concise test cases
+    "SIM102", # nested ifs OK for pedagogical clarity
+    "SIM118", # .keys() OK for explicit teaching
+    "RUF015", # list slicing OK over next(iter(...))
+    "E712",   # == True/False OK for explicit boolean teaching
+    "E501",   # long lines OK for descriptive assertion messages
+    "W293",   # whitespace in blank lines OK in docstrings
+    "E741",   # ambiguous variable names OK for math notation (I, l, O)
+    "N806",   # uppercase variables OK for math notation (K, X, Y)
+    "N802",   # uppercase function names OK for math notation (ReLU)
+    "N816",   # mixedCase variables OK for math notation (test_X)
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
