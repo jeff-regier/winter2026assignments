@@ -9,22 +9,31 @@ dependencies = [
     "matplotlib>=3.10.8",
     "numpy>=2.4.0",
     "pandas>=2.3.3",
+    "requests>=2.31.0",
     "ruff>=0.14.10",
     "scikit-learn>=1.8.0",
     "scikit-image>=0.25.2",
     "torch>=2.9.1",
-    "typer>=0.21.0",
     "nbformat>=5.10.4",
     "nbconvert>=7.16.6",
     "pre-commit>=4.0.0",
     "nbstripout>=0.8.2",
+    "torchvision>=0.24.1",
+    "torch-geometric>=2.7.0",
+    "networkx>=3.4.2",
+    "mnist1d>=0.0.2",
+    "datasets>=3.2.0",
+    "transformers>=4.47.1",
+    "tqdm>=4.67.1",
+    "astropy>=7.0.0",
+    "nltk>=3.9.1",
 ]
 
 [project.scripts]
 release = "release:app"
 
 [tool.ruff]
-line-length = 88
+line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
@@ -82,6 +91,8 @@ ignore = [
     "COM812", # conflicts with ruff formatter
     "RET505", # elif after return OK for pedagogical clarity
     "UP032",  # .format() OK when teaching string formatting
+    "PLR0402", # import torch.nn as nn is standard PyTorch convention
+    "N812",   # import torch.nn.functional as F is standard PyTorch convention
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -97,19 +108,55 @@ ignore = [
     "F821",    # undefined names expected (cross-cell references)
     "F811",    # redefinitions expected (teaching same concept multiple ways)
     "PT018",   # compound assertions OK for concise hidden tests
+    "PLR0913", # neural net functions need many parameters
+    "PLW2901", # loop variable reassignment (e.g., images = images.to(device)) is idiomatic PyTorch
+    "E703",    # trailing semicolons used to suppress Jupyter output
+    "S311",    # standard random OK for educational ML code
+    "FBT002",  # boolean default args OK in educational code
+    "TRY003",  # long exception messages OK for clarity
+    "EM102",   # f-string exceptions OK for clarity
+    "SIM108",  # if-else blocks OK for pedagogical clarity
+    "INP001",  # notebooks don't need __init__.py
+    "B905",    # zip() without strict OK for educational code
+    "COM818",  # trailing commas OK in notebooks
+    "N806",    # B, C, H, W are standard ML tensor dimension names
 ]
-"Homework1.ipynb" = [
+"homework1/*.ipynb" = [
     "PERF401", # teaching loops before comprehensions
     "PLR0133", # teaching type coercion behavior
     "SIM118",  # explicit .keys() for teaching dict iteration
     "RUF015",  # slice readability over next(iter(...))
     "FBT002",  # teaching function default arguments
 ]
-"Homework2.ipynb" = [
+"homework2/*.ipynb" = [
     "SIM102",  # nested ifs for pedagogical clarity
+    "SIM103",  # explicit if/return for pedagogical clarity
 ]
-"GroupWork2.ipynb" = [
-    "PLR0913", # neural net functions need many parameters
+"homework3/*.ipynb" = [
+    "N803",    # X is standard ML convention for data matrices
+    "N806",    # X_augmented etc. follow ML naming conventions
+]
+"groupwork6/*.ipynb" = [
+    "ARG001",  # unused function args OK in student templates
+    "PTH110",  # os.path.exists OK for simple file checks
+    "S310",    # urlretrieve OK for downloading dataset
+]
+"groupwork12/stgat_traffic_prediction/**/*.py" = [
+    "F403",    # star imports OK in reference implementation
+    "F405",    # undefined from star imports OK
+    "N801",    # ST_GAT is standard model name from paper
+    "N802",    # MAPE, RMSE, MAE are standard ML metric names
+    "N803",    # W is standard notation for weight matrix
+    "N806",    # W, W2 etc. follow paper notation
+    "FBT002",  # boolean defaults OK in reference code
+    "E501",    # long lines OK in reference code
+    "PTH118",  # os.path OK in reference code
+    "PTH123",  # open() OK in reference code
+    "PLW2901", # loop var overwriting OK in reference code
+    "PLR0913", # many args OK in reference code
+    "ARG001",  # unused args OK in reference code
+    "A001",    # shadowing builtins OK in reference code
+    "A002",    # shadowing builtins OK in reference code
 ]
 
 [tool.ruff.lint.mccabe]

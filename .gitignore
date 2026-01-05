@@ -11,3 +11,13 @@ wheels/
 .vscode
 .claude
 student/
+
+# Data files
+*.csv
+*.pkl
+*.json
+*.zip
+*.gz
+*ubyte
+data/
+*.pt

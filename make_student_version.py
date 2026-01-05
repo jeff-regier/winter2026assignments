@@ -6,21 +6,16 @@ Validates and prepares Jupyter notebooks for student release by:
 - Running ruff linting
 - Executing notebooks to verify solutions pass
 - Stripping solutions and hidden tests for student versions
+
+Usage: python make_student_version.py <notebook.ipynb>
 """
 
 import json
 import re
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Annotated
-
-import typer
-
-app = typer.Typer(
-    help="Validate and release homework assignments.",
-    add_completion=False,
-)
 
 
 @dataclass
@@ -31,13 +26,18 @@ class Problem:
     1. Prompt cell (markdown) - contains problem description
     2. Solution cell (code) - contains solution code, NO tests
     3. Test cell (code) - contains visible and hidden tests, NO solution markers
+
+    For free-response problems (markdown solutions):
+    1. Prompt cell (markdown) - contains problem description
+    2. Solution cell (markdown) - contains solution text with markers
     """
 
-    number: int
+    number: str  # e.g., "1", "2a", "3b"
     title: str
     prompt_cell_idx: int
     solution_cell_idx: int = -1
     test_cell_idx: int = -1
+    is_free_response: bool = False  # True if solution is markdown (no tests needed)
     # Track validation errors for this problem
     errors: list[str] = field(default_factory=list)
 
@@ -55,9 +55,10 @@ class Problem:
 
     @property
     def is_complete(self) -> bool:
-        return (
-            self.has_prompt and self.has_solution and self.has_tests and not self.errors
-        )
+        if self.is_free_response:
+            # Free-response problems only need prompt and solution (no tests)
+            return self.has_prompt and self.has_solution and not self.errors
+        return self.has_prompt and self.has_solution and self.has_tests and not self.errors
 
 
 @dataclass
@@ -120,8 +121,9 @@ def has_any_assert(source: str) -> bool:
 # Pattern to match problem headers like:
 #   "### Problem 1:" or "## (10 pts) Problem 2:"
 #   "#### **Problem 3:**" or "#### **(10 pts) Problem 4:**"
+#   "### Problem 2a:" or "### Problem 3b:" (with letter suffix)
 PROBLEM_PATTERN = re.compile(
-    r"^#{2,4}\s*\*{0,2}(?:\([^)]+\)\s*)?\*{0,2}\s*Problem\s+(\d+)[:\s*]+(.+)$",
+    r"^#{2,4}\s*\*{0,2}(?:\([^)]+\)\s*)?\*{0,2}\s*Problem\s+(\d+[a-z]?)[:\s*]+(.+)$",
     re.MULTILINE,
 )
 
@@ -133,6 +135,10 @@ def find_problems(nb: dict) -> list[Problem]:
     1. Prompt cell (markdown) - contains "Problem N: title"
     2. Solution cell (code) - contains solution markers, NO asserts
     3. Test cell (code) - contains asserts (visible + hidden), NO solution markers
+
+    For free-response problems:
+    1. Prompt cell (markdown) - contains "Problem N: title"
+    2. Solution cell (markdown) - contains solution markers (no tests needed)
     """
     problems: list[Problem] = []
     cells = nb.get("cells", [])
@@ -144,9 +150,7 @@ def find_problems(nb: dict) -> list[Problem]:
             source = get_cell_source(cell)
             match = PROBLEM_PATTERN.search(source)
             if match:
-                prompt_indices.append(
-                    (idx, int(match.group(1)), match.group(2).strip())
-                )
+                prompt_indices.append((idx, match.group(1), match.group(2).strip()))
 
     # Second pass: validate structure for each problem
     for i, (prompt_idx, problem_num, title) in enumerate(prompt_indices):
@@ -157,9 +161,7 @@ def find_problems(nb: dict) -> list[Problem]:
         )
 
         # Determine the range of cells for this problem
-        next_prompt_idx = (
-            prompt_indices[i + 1][0] if i + 1 < len(prompt_indices) else len(cells)
-        )
+        next_prompt_idx = prompt_indices[i + 1][0] if i + 1 < len(prompt_indices) else len(cells)
 
         # Look for solution cell and test cell in the cells after the prompt
         solution_found = False
@@ -167,10 +169,18 @@ def find_problems(nb: dict) -> list[Problem]:
 
         for idx in range(prompt_idx + 1, next_prompt_idx):
             cell = cells[idx]
+            source = get_cell_source(cell)
+
+            # Check for markdown solution cell (free-response problem)
+            if cell.get("cell_type") == "markdown" and has_solution_marker(source):
+                problem.solution_cell_idx = idx
+                problem.is_free_response = True
+                solution_found = True
+                continue
+
             if cell.get("cell_type") != "code":
                 continue
 
-            source = get_cell_source(cell)
             cell_has_solution = has_solution_marker(source)
             cell_has_assert = has_any_assert(source)
             cell_has_hidden = has_hidden_tests(source)
@@ -201,13 +211,9 @@ def find_problems(nb: dict) -> list[Problem]:
 
                 # Validate: test cell should have both visible and hidden tests
                 if not has_visible_assert(source):
-                    problem.errors.append(
-                        f"Test cell (cell {idx}) missing visible tests"
-                    )
+                    problem.errors.append(f"Test cell (cell {idx}) missing visible tests")
                 if not cell_has_hidden:
-                    problem.errors.append(
-                        f"Test cell (cell {idx}) missing hidden tests"
-                    )
+                    problem.errors.append(f"Test cell (cell {idx}) missing hidden tests")
 
                 # Validate: test cell should start with "# Test assertions"
                 first_line = source.split("\n")[0].strip() if source else ""
@@ -216,30 +222,9 @@ def find_problems(nb: dict) -> list[Problem]:
                         f"Test cell (cell {idx}) must start with '# Test assertions'"
                     )
 
-                # Validate: test cell should be the last code cell before next problem
-                # (i.e., followed by markdown or end of problem section)
-                next_cell_idx = idx + 1
-                if next_cell_idx < next_prompt_idx:
-                    next_cell = cells[next_cell_idx]
-                    if next_cell.get("cell_type") == "code":
-                        problem.errors.append(
-                            f"Test cell (cell {idx}) should be followed by a markdown "
-                            f"cell, not another code cell (cell {next_cell_idx})"
-                        )
-
         problems.append(problem)
 
     return problems
-
-
-def extract_code_cells(nb: dict) -> str:
-    """Extract all code from code cells for ruff checking."""
-    code_parts = []
-    for cell in nb.get("cells", []):
-        if cell.get("cell_type") == "code":
-            source = get_cell_source(cell)
-            code_parts.append(source)
-    return "\n\n".join(code_parts)
 
 
 def run_ruff_check(notebook_path: Path) -> list[str]:
@@ -381,127 +366,6 @@ def strip_solutions_and_hidden_tests(source_lines: list[str]) -> list[str]:
     return result
 
 
-def is_test_header_comment(line: str) -> bool:
-    """Check if a line is a test section header comment."""
-    stripped = line.strip().lower()
-    return stripped.startswith("# test") and not stripped.startswith("# testing")
-
-
-def split_solution_and_tests(source_lines: list[str]) -> tuple[list[str], list[str]]:
-    """Split a cell's source into solution code and test code.
-
-    Returns (solution_lines, test_lines).
-    """
-    solution_lines: list[str] = []
-    test_lines: list[str] = []
-
-    in_solution = False
-    found_test_start = False
-
-    for line in source_lines:
-        stripped = line.rstrip("\n").strip()
-
-        # Track solution blocks
-        if stripped == "# BEGIN SOLUTION":
-            in_solution = True
-        elif stripped == "# END SOLUTION":
-            in_solution = False
-
-        # Track hidden test blocks
-        if stripped in {"# BEGIN HIDDEN TESTS", "# END HIDDEN TESTS"}:
-            pass
-
-        # Check if this line starts the test section
-        is_assert_line = "assert " in line and not in_solution
-        is_hidden_marker = stripped == "# BEGIN HIDDEN TESTS"
-        is_test_comment = is_test_header_comment(line) and not in_solution
-
-        if (
-            is_assert_line or is_hidden_marker or is_test_comment
-        ) and not found_test_start:
-            found_test_start = True
-
-        # Route line to appropriate section
-        if found_test_start:
-            test_lines.append(line)
-        else:
-            solution_lines.append(line)
-
-    # Clean up trailing empty lines from solution
-    while solution_lines and solution_lines[-1].strip() == "":
-        solution_lines.pop()
-
-    # Add newline at end of solution if needed
-    if solution_lines and not solution_lines[-1].endswith("\n"):
-        solution_lines[-1] += "\n"
-
-    return solution_lines, test_lines
-
-
-def fix_notebook_structure(notebook_path: Path) -> tuple[int, int]:
-    """Fix notebook structure by splitting combined solution/test cells.
-
-    Returns (cells_split, cells_unchanged).
-    """
-    with notebook_path.open() as f:
-        nb = json.load(f)
-
-    new_cells = []
-    cells_split = 0
-    cells_unchanged = 0
-
-    for cell in nb["cells"]:
-        if cell["cell_type"] != "code":
-            new_cells.append(cell)
-            continue
-
-        source = cell.get("source", [])
-        if isinstance(source, str):
-            source = source.split("\n")
-            source = [line + "\n" for line in source[:-1]] + [source[-1]]
-
-        source_text = "".join(source)
-        cell_has_solution = has_solution_marker(source_text)
-        cell_has_assert = has_any_assert(source_text)
-
-        # If cell has both solution and tests, split it
-        if cell_has_solution and cell_has_assert:
-            solution_lines, test_lines = split_solution_and_tests(source)
-
-            if solution_lines and test_lines:
-                # Create solution cell
-                solution_cell = cell.copy()
-                solution_cell["source"] = solution_lines
-                solution_cell["outputs"] = []
-                solution_cell["execution_count"] = None
-                new_cells.append(solution_cell)
-
-                # Create test cell
-                test_cell = {
-                    "cell_type": "code",
-                    "execution_count": None,
-                    "metadata": {},
-                    "outputs": [],
-                    "source": test_lines,
-                }
-                new_cells.append(test_cell)
-                cells_split += 1
-            else:
-                # Couldn't split properly, keep original
-                new_cells.append(cell)
-                cells_unchanged += 1
-        else:
-            new_cells.append(cell)
-            cells_unchanged += 1
-
-    nb["cells"] = new_cells
-
-    with notebook_path.open("w") as f:
-        json.dump(nb, f, indent=1)
-
-    return cells_split, cells_unchanged
-
-
 def process_notebook(input_path: Path, output_dir: Path) -> tuple[Path, int, int]:
     """Process a notebook and write the student version."""
     with input_path.open() as f:
@@ -522,9 +386,7 @@ def process_notebook(input_path: Path, output_dir: Path) -> tuple[Path, int, int
                 source = [line + "\n" for line in source[:-1]] + [source[-1]]
 
             source_text = "".join(source)
-            has_solution = (
-                "# BEGIN SOLUTION" in source_text or "# SOLUTION" in source_text
-            )
+            has_solution = "# BEGIN SOLUTION" in source_text or "# SOLUTION" in source_text
             has_hidden = "# BEGIN HIDDEN TESTS" in source_text
 
             if has_solution or has_hidden:
@@ -543,280 +405,94 @@ def process_notebook(input_path: Path, output_dir: Path) -> tuple[Path, int, int
     return output_file, solutions_stripped, hidden_tests_stripped
 
 
-@app.command()
-def check(
-    notebooks: Annotated[
-        list[Path],
-        typer.Argument(
-            help="Notebook files to validate",
-            exists=True,
-            dir_okay=False,
-            readable=True,
-        ),
-    ],
-    skip_ruff: Annotated[
-        bool,
-        typer.Option("--skip-ruff", help="Skip ruff linting check"),
-    ] = False,
-    skip_execution: Annotated[
-        bool,
-        typer.Option("--skip-execution", help="Skip notebook execution check"),
-    ] = False,
-) -> None:
-    """Validate notebooks: problems, ruff, and execution."""
+def print_validation_result(result: ValidationResult) -> bool:
+    """Print validation results and return True if valid."""
+    print(f"\n{result.notebook_path}")
+    print("=" * 60)
+
     all_valid = True
 
-    for notebook_path in notebooks:
-        print(f"\n{notebook_path}")
-        print("=" * 60)
+    if not result.problems:
+        print("  No problems found in notebook")
+        return False
 
-        result = validate_notebook(
-            notebook_path,
-            check_ruff=not skip_ruff,
-            check_execution=not skip_execution,
-        )
+    for problem in result.problems:
+        suffix = " (free response)" if problem.is_free_response else ""
+        print(f"  Problem {problem.number}: {problem.title}{suffix}")
 
-        if not result.problems:
-            print("  No problems found in notebook")
-            all_valid = False
-            continue
+        missing = []
+        if not problem.has_prompt:
+            missing.append("prompt cell")
+        if not problem.has_solution:
+            missing.append("solution cell")
+        if not problem.has_tests and not problem.is_free_response:
+            missing.append("test cell")
 
-        for problem in result.problems:
-            print(f"  Problem {problem.number}: {problem.title}")
-
-            missing = []
-            if not problem.has_prompt:
-                missing.append("prompt cell")
-            if not problem.has_solution:
-                missing.append("solution cell")
-            if not problem.has_tests:
-                missing.append("test cell")
-
-            if missing:
-                print(f"    MISSING: {', '.join(missing)}")
-                all_valid = False
-
-            if problem.errors:
-                for error in problem.errors:
-                    print(f"    ERROR: {error}")
-                all_valid = False
-
-            if not missing and not problem.errors:
-                print("    OK")
-
-        if result.ruff_errors:
-            print("\n  Ruff errors:")
-            for error in result.ruff_errors[:10]:
-                print(f"    {error}")
-            if len(result.ruff_errors) > 10:
-                print(f"    ... and {len(result.ruff_errors) - 10} more")
+        if missing:
+            print(f"    MISSING: {', '.join(missing)}")
             all_valid = False
 
-        if result.execution_errors:
-            print("\n  Execution errors:")
-            for error in result.execution_errors[:5]:
-                print(f"    {error}")
+        if problem.errors:
+            for error in problem.errors:
+                print(f"    ERROR: {error}")
             all_valid = False
 
-        if not result.ruff_errors and not result.execution_errors:
-            print("\n  Ruff: OK")
-            print("  Execution: OK")
+        if not missing and not problem.errors:
+            print("    OK")
 
-    print()
-    if all_valid:
-        print("All notebooks valid!")
+    if result.ruff_errors:
+        print("\n  Ruff errors:")
+        for error in result.ruff_errors[:10]:
+            print(f"    {error}")
+        if len(result.ruff_errors) > 10:
+            print(f"    ... and {len(result.ruff_errors) - 10} more")
+        all_valid = False
     else:
-        print("Some notebooks have issues.")
-        raise typer.Exit(1)
+        print("\n  Ruff: OK")
+
+    if result.execution_errors:
+        print("\n  Execution errors:")
+        for error in result.execution_errors[:5]:
+            print(f"    {error}")
+        all_valid = False
+    else:
+        print("  Execution: OK")
+
+    return all_valid
 
 
-@app.command()
-def release(
-    notebooks: Annotated[
-        list[Path],
-        typer.Argument(
-            help="Notebook files to release",
-            exists=True,
-            dir_okay=False,
-            readable=True,
-        ),
-    ],
-    output_dir: Annotated[
-        Path,
-        typer.Option(
-            "--output-dir",
-            "-o",
-            help="Output directory for student versions",
-        ),
-    ] = Path("student"),
-    dry_run: Annotated[
-        bool,
-        typer.Option(
-            "--dry-run",
-            "-n",
-            help="Show what would be done without writing files",
-        ),
-    ] = False,
-    skip_check: Annotated[
-        bool,
-        typer.Option(
-            "--skip-check",
-            help="Skip validation before releasing (not recommended)",
-        ),
-    ] = False,
-) -> None:
-    """Validate and release notebooks for students.
+def main() -> None:
+    """Validate notebook and create student version."""
+    if len(sys.argv) != 2:
+        print("Usage: python make_student_version.py <notebook.ipynb>")
+        sys.exit(1)
 
-    Runs validation (problems, ruff, execution) then creates student versions
-    with solutions and hidden tests removed. Original files are never modified.
-    """
-    # Run validation first unless skipped
-    if not skip_check:
-        print("Validating notebooks...")
-        all_valid = True
-        for notebook_path in notebooks:
-            result = validate_notebook(
-                notebook_path, check_ruff=True, check_execution=True
-            )
+    notebook_path = Path(sys.argv[1])
 
-            if not result.problems:
-                print(f"  {notebook_path}: No problems found")
-                all_valid = False
-                continue
+    if not notebook_path.exists():
+        print(f"Error: {notebook_path} not found")
+        sys.exit(1)
 
-            incomplete = [p for p in result.problems if not p.is_complete]
-            if incomplete:
-                print(f"  {notebook_path}: {len(incomplete)} incomplete problem(s)")
-                for p in incomplete:
-                    issues = []
-                    if not p.has_solution:
-                        issues.append("missing solution cell")
-                    if not p.has_tests:
-                        issues.append("missing test cell")
-                    issues.extend(p.errors)
-                    print(f"    Problem {p.number}: {'; '.join(issues)}")
-                all_valid = False
+    if notebook_path.suffix != ".ipynb":
+        print(f"Error: {notebook_path} is not a Jupyter notebook")
+        sys.exit(1)
 
-            if result.ruff_errors:
-                print(f"  {notebook_path}: {len(result.ruff_errors)} ruff error(s)")
-                all_valid = False
+    # Validate the notebook
+    result = validate_notebook(notebook_path, check_ruff=True, check_execution=True)
+    is_valid = print_validation_result(result)
 
-            if result.execution_errors:
-                print(f"  {notebook_path}: execution failed")
-                for err in result.execution_errors[:3]:
-                    print(f"    {err}")
-                all_valid = False
+    if not is_valid:
+        print("\nValidation failed. Fix issues before releasing.")
+        sys.exit(1)
 
-        if not all_valid:
-            print("\nValidation failed. Fix issues or use --skip-check to bypass.")
-            raise typer.Exit(1)
+    # Create student version
+    output_dir = Path("student")
+    output_file, sol_count, hidden_count = process_notebook(notebook_path, output_dir)
 
-        print("All notebooks valid.\n")
-
-    # Proceed with stripping
-    if not dry_run:
-        output_dir.mkdir(exist_ok=True)
-
-    total_solutions = 0
-    total_hidden = 0
-
-    for notebook in notebooks:
-        if dry_run:
-            with notebook.open() as f:
-                nb = json.load(f)
-            sol_count = sum(
-                1
-                for c in nb["cells"]
-                if c.get("cell_type") == "code"
-                and (
-                    "# BEGIN SOLUTION" in get_cell_source(c)
-                    or "# SOLUTION" in get_cell_source(c)
-                )
-            )
-            hidden_count = sum(
-                1
-                for c in nb["cells"]
-                if c.get("cell_type") == "code"
-                and "# BEGIN HIDDEN TESTS" in get_cell_source(c)
-            )
-            output_file = output_dir / notebook.name
-            print(
-                f"[dry-run] {notebook} -> {output_file} "
-                f"({sol_count} solutions, {hidden_count} hidden tests)"
-            )
-        else:
-            output_file, sol_count, hidden_count = process_notebook(
-                notebook, output_dir
-            )
-            print(
-                f"{notebook} -> {output_file} "
-                f"({sol_count} solutions, {hidden_count} hidden tests stripped)"
-            )
-
-        total_solutions += sol_count
-        total_hidden += hidden_count
-
-    suffix = " [dry-run]" if dry_run else ""
-    print(
-        f"\nProcessed {len(notebooks)} notebook(s): "
-        f"{total_solutions} solution(s), {total_hidden} hidden test(s){suffix}"
-    )
-
-
-@app.command("fix-structure")
-def fix_structure(
-    notebooks: Annotated[
-        list[Path],
-        typer.Argument(
-            help="Notebook files to fix",
-            exists=True,
-            dir_okay=False,
-            readable=True,
-        ),
-    ],
-    dry_run: Annotated[
-        bool,
-        typer.Option(
-            "--dry-run",
-            "-n",
-            help="Show what would be done without modifying files",
-        ),
-    ] = False,
-) -> None:
-    """Fix notebook structure by splitting combined solution/test cells.
-
-    For cells that contain both solution markers and assert statements,
-    splits them into separate cells:
-    1. Solution cell (code with solution markers)
-    2. Test cell (asserts and hidden tests)
-
-    This converts notebooks to the otter-grader style structure.
-    """
-    total_split = 0
-
-    for notebook_path in notebooks:
-        if dry_run:
-            with notebook_path.open() as f:
-                nb = json.load(f)
-
-            split_count = 0
-            for cell in nb["cells"]:
-                if cell.get("cell_type") != "code":
-                    continue
-                source_text = get_cell_source(cell)
-                if has_solution_marker(source_text) and has_any_assert(source_text):
-                    split_count += 1
-
-            print(f"[dry-run] {notebook_path}: would split {split_count} cell(s)")
-            total_split += split_count
-        else:
-            cells_split, _ = fix_notebook_structure(notebook_path)
-            print(f"{notebook_path}: split {cells_split} cell(s)")
-            total_split += cells_split
-
-    suffix = " [dry-run]" if dry_run else ""
-    print(f"\nTotal: {total_split} cell(s) split{suffix}")
+    print(f"\nCreated: {output_file}")
+    print(f"  {sol_count} solution(s) stripped")
+    print(f"  {hidden_count} hidden test(s) stripped")
 
 
 if __name__ == "__main__":
-    app()
+    main()
