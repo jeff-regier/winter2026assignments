@@ -7,7 +7,7 @@ This repository contains course materials for DATASCI 315 and DATASCI 503, inclu
   - `homework*/` - Individual homework assignments (Jupyter notebooks)
   - `groupwork*/` - Group work assignments (Jupyter notebooks)
 - `datasci503/` - DATASCI 503 course materials
-- `student/` - Student versions of assignments (solutions stripped)
+- `*/student/` - Student versions of assignments (solutions stripped, in each assignment's subdirectory)
 - `make_student_version.py` - Tool to validate and generate student versions
 
 ## Key Commands
@@ -26,23 +26,24 @@ uv run python make_student_version.py <path/to/notebook.ipynb>
 ## Assignment Conventions
 
 ### Solution Markers
-- Block solutions: `# BEGIN SOLUTION` / `# END SOLUTION`
-- Inline solutions: `variable = value  # SOLUTION`
-- Free-response (markdown): Same markers in markdown cells for text-only answers
+- Block solutions (code): `# BEGIN SOLUTION` / `# END SOLUTION`
+- Inline solutions (code): `variable = value  # SOLUTION`
+- Free-response (markdown): `> BEGIN SOLUTION` / `> END SOLUTION` (blockquote style)
 
 ### Free-Response Problems
-For problems requiring written explanations (no code), use solution markers in a markdown cell:
+For problems requiring written explanations (no code), use blockquote-style markers in a markdown cell:
 ```markdown
 ### Problem N: Title
 
 Question text here.
-```
-```markdown
-# BEGIN SOLUTION
+
+> BEGIN SOLUTION
+
 Your answer text here.
-# END SOLUTION
+
+> END SOLUTION
 ```
-The validator will recognize these as "(free response)" and won't require test cells.
+Note: Two newlines after `> BEGIN SOLUTION` so it renders on its own line. The validator will recognize these as "(free response)" and won't require test cells.
 
 ### Test Cell Structure
 1. First line must be: `# Test assertions`

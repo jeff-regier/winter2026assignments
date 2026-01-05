@@ -89,7 +89,7 @@ def get_cell_source(cell: dict) -> str:
 
 def has_solution_marker(source: str) -> bool:
     """Check if source contains solution markers."""
-    return "# BEGIN SOLUTION" in source or "# SOLUTION" in source
+    return "# BEGIN SOLUTION" in source or "# SOLUTION" in source or "> BEGIN SOLUTION" in source
 
 
 def has_hidden_tests(source: str) -> bool:
@@ -314,11 +314,28 @@ def strip_solutions_and_hidden_tests(source_lines: list[str]) -> list[str]:
     result = []
     in_solution = False
     in_hidden_tests = False
+    skip_next_blank = False  # For skipping blank line after > BEGIN SOLUTION
 
     for line in source_lines:
         stripped = line.rstrip("\n").strip()
 
-        # Handle solution markers
+        # Skip blank line after markdown solution marker
+        if skip_next_blank:
+            skip_next_blank = False
+            if stripped == "":
+                continue
+
+        # Handle markdown solution markers (blockquote style)
+        if stripped == "> BEGIN SOLUTION":
+            in_solution = True
+            result.append("> *Your answer here*\n")
+            skip_next_blank = True
+            continue
+        if stripped == "> END SOLUTION":
+            in_solution = False
+            continue
+
+        # Handle code solution markers
         if stripped == "# BEGIN SOLUTION":
             in_solution = True
             indent = len(line) - len(line.lstrip())
@@ -376,17 +393,18 @@ def process_notebook(input_path: Path, output_dir: Path) -> tuple[Path, int, int
     hidden_tests_stripped = 0
 
     for cell in nb["cells"]:
+        source = cell.get("source", [])
+        if isinstance(source, str):
+            source = source.split("\n")
+            source = [line + "\n" for line in source[:-1]] + [source[-1]]
+
+        source_text = "".join(source)
+
         if cell["cell_type"] == "code":
             # Clear outputs and execution count for student version
             cell["outputs"] = []
             cell["execution_count"] = None
 
-            source = cell.get("source", [])
-            if isinstance(source, str):
-                source = source.split("\n")
-                source = [line + "\n" for line in source[:-1]] + [source[-1]]
-
-            source_text = "".join(source)
             has_solution = "# BEGIN SOLUTION" in source_text or "# SOLUTION" in source_text
             has_hidden = "# BEGIN HIDDEN TESTS" in source_text
 
@@ -396,6 +414,12 @@ def process_notebook(input_path: Path, output_dir: Path) -> tuple[Path, int, int
                     solutions_stripped += 1
                 if has_hidden:
                     hidden_tests_stripped += 1
+
+        elif cell["cell_type"] == "markdown":
+            # Handle markdown cells with solution markers
+            if "> BEGIN SOLUTION" in source_text:
+                cell["source"] = strip_solutions_and_hidden_tests(source)
+                solutions_stripped += 1
 
     output_dir.mkdir(exist_ok=True)
     output_file = output_dir / input_path.name
@@ -486,8 +510,8 @@ def main() -> None:
         print("\nValidation failed. Fix issues before releasing.")
         sys.exit(1)
 
-    # Create student version
-    output_dir = Path("student")
+    # Create student version in assignment's student subdirectory
+    output_dir = notebook_path.parent / "student"
     output_file, sol_count, hidden_count = process_notebook(notebook_path, output_dir)
 
     print(f"\nCreated: {output_file}")

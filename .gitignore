@@ -1,5 +1,7 @@
-# nonsense
 .DS_Store
+student/
+.venv
+.vscode
 
 # Python-generated files
 __pycache__/
@@ -9,19 +11,16 @@ dist/
 wheels/
 *.egg-info
 
-# Virtual environments
-.venv
-.vscode
-.claude
-student/
-
 # Data files
+data/
 *.csv
 *.pkl
 *.json
 *.zip
 *.gz
 *ubyte
-data/
 *.pt
+*.xpt
 *.data
+*.dot
+*.dot.png
