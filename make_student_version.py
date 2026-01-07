@@ -69,13 +69,14 @@ class ValidationResult:
     problems: list[Problem] = field(default_factory=list)
     ruff_errors: list[str] = field(default_factory=list)
     execution_errors: list[str] = field(default_factory=list)
+    execution_skipped: bool = False
 
     @property
     def is_valid(self) -> bool:
         return (
             all(p.is_complete for p in self.problems)
             and not self.ruff_errors
-            and not self.execution_errors
+            and (self.execution_skipped or not self.execution_errors)
         )
 
 
@@ -307,6 +308,7 @@ def validate_notebook(
         problems=problems,
         ruff_errors=ruff_errors,
         execution_errors=execution_errors,
+        execution_skipped=not check_execution,
     )
 
 
@@ -476,7 +478,9 @@ def print_validation_result(result: ValidationResult) -> bool:
     else:
         print("\n  Ruff: OK")
 
-    if result.execution_errors:
+    if result.execution_skipped:
+        print("  Execution: SKIPPED")
+    elif result.execution_errors:
         print("\n  Execution errors:")
         for error in result.execution_errors[:5]:
             print(f"    {error}")
@@ -489,11 +493,16 @@ def print_validation_result(result: ValidationResult) -> bool:
 
 def main() -> None:
     """Validate notebook and create student version."""
-    if len(sys.argv) != 2:
-        print("Usage: python make_student_version.py <notebook.ipynb>")
+    # Parse arguments
+    args = sys.argv[1:]
+    skip_execution = "--skip-execution" in args
+    args = [a for a in args if a != "--skip-execution"]
+
+    if len(args) != 1:
+        print("Usage: python make_student_version.py [--skip-execution] <notebook.ipynb>")
         sys.exit(1)
 
-    notebook_path = Path(sys.argv[1])
+    notebook_path = Path(args[0])
 
     if not notebook_path.exists():
         print(f"Error: {notebook_path} not found")
@@ -504,7 +513,7 @@ def main() -> None:
         sys.exit(1)
 
     # Validate the notebook
-    result = validate_notebook(notebook_path, check_ruff=True, check_execution=True)
+    result = validate_notebook(notebook_path, check_ruff=True, check_execution=not skip_execution)
     is_valid = print_validation_result(result)
 
     if not is_valid:

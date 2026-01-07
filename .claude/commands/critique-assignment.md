@@ -41,9 +41,14 @@ Check each dimension below and note any issues found:
 - **Missing error messages**: Do assertions have descriptive failure messages?
 - **Missing edge cases**: Do tests cover boundary conditions?
 - **Weak tests**: Could tests pass with incorrect implementations?
-- **Solution giveaway**: Do visible tests reveal the solution approach? (Note: Hidden tests CANNOT give away solutions since students never see them - only flag this for visible tests)
+- **Solution giveaway in VISIBLE tests**: Do visible tests reveal the solution approach?
 - **Insufficient coverage**: Does each problem have at least 2 visible tests?
-- **Identical hidden tests**: Hidden tests can check similar things as visible tests, but should not be exactly identical (to prevent students from hardcoding answers). Hidden tests CAN check specific expected values or outcomes without concern about "revealing" solutions.
+- **Identical hidden tests**: Hidden tests should not be exactly identical to visible tests (to prevent hardcoding).
+
+**IMPORTANT - Hidden Tests**: Hidden tests (between `# BEGIN HIDDEN TESTS` and `# END HIDDEN TESTS`) are STRIPPED from student versions by `make_student_version.py`. Students NEVER see hidden tests. Therefore:
+- Hidden tests CANNOT "reveal" or "give away" solutions - do NOT flag this
+- Hidden tests CAN and SHOULD check specific expected values, exact counts, architecture details, etc.
+- Only flag "solution giveaway" issues in VISIBLE tests (outside the hidden test markers)
 
 Note: Free-response problems (using blockquote solution markers in markdown cells) are manually graded and do not require test cells. This is expected behavior.
 
