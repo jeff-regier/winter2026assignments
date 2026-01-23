@@ -61,6 +61,19 @@ Note: Two newlines after `> BEGIN SOLUTION` so it renders on its own line. The v
 ### Cell Separation Rule
 Solution code and test assertions must be in SEPARATE cells. Never put asserts in the same cell as `# BEGIN SOLUTION`.
 
+### Multipart Problem Structure
+For problems with multiple parts (a), (b), (c), etc., each part MUST have its own question cell followed by its own solution cell. Do NOT combine all parts in one question cell with all solutions in one solution block.
+
+Correct structure:
+```
+[Question cell: Problem intro + part (a)]
+[Solution cell for part (a)]
+[Question cell: part (b)]
+[Solution cell for part (b)]
+[Question cell: part (c)]
+[Solution cell for part (c)]
+```
+
 ### Problem Headers
 Use a horizontal rule followed by bold text (not markdown headers, to avoid hierarchy conflicts):
 ```markdown

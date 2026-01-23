@@ -61,6 +61,10 @@ Review for good teaching practices:
 - **Problem headers**: Use `---` followed by `**Problem N: Title**` (horizontal rule + bold text, not markdown headers)
 - **Assignment title**: `# DATASCI 315, [Assignment Type] [N]: [Topic]`
 - **Sub-parts**: Format as (a), (b), (c) with clear separation
+- **Multipart problem structure**: Each part of a multipart problem MUST have its own question cell followed by its own solution cell. Do NOT combine all parts in one question cell with all solutions in one solution block. The correct structure is:
+  - Question cell for part (a) → Solution cell for part (a)
+  - Question cell for part (b) → Solution cell for part (b)
+  - etc.
 - **Consistent hint format**: Use `**Hint:**` consistently
 - **Consistent expected output format**: Use `**Expected output:**` consistently
 - **No trailing whitespace**: Clean up any extra spaces
