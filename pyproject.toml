@@ -159,9 +159,16 @@ ignore = [
     "E501",    # long lines OK in complex formatting strings
     "E402",    # imports not at top OK for incremental cell execution
 ]
+"datasci503/groupwork5/*.ipynb" = [
+    "N802",    # KFoldCV etc. use pedagogical function naming
+    "N803",    # X, K are standard ML convention names
+]
 "datasci503/groupwork6/*.ipynb" = [
     "N803",    # X is standard ML convention for data matrices
     "PERF401", # teaching explicit loops before list comprehensions
+]
+"datasci503/homework1/*.ipynb" = [
+    "PERF401", # teaching loops before comprehensions
 ]
 "datasci315/groupwork6/*.ipynb" = [
     "ARG001",  # unused function args OK in student templates
